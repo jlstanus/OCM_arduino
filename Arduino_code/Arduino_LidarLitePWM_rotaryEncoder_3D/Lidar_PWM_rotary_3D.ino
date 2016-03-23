@@ -51,7 +51,7 @@ void loop() {
   previous_counter_t = counter_tetha;
   previous_counter_p = counter_phi;
   // Send the value of counter
-  Serial.print(rho, DEC); Serial.print ("    "); Serial.print (tetha, DEC); Serial.print ("    "); Serial.println (phi * 1.8, DEC);
+  Serial.print(rho, DEC); Serial.print ("    "); Serial.print (tetha, DEC); Serial.print ("    "); Serial.println (phi, DEC);
   delay(20); //Delay so we don't overload the serial port
 }
 }
