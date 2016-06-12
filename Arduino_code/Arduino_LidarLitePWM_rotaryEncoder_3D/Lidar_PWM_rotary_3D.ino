@@ -1,99 +1,48 @@
+#include <Encoder.h>
+#include <I2C.h>
+#define LIDARLite_ADDRESS 0x62 // Default I2C Address of LIDAR-Lite.
+#define RegisterMeasure 0x00 // Register to write to initiate ranging.
+#define MeasureValue 0x04 // Value to initiate ranging.
+#define RegisterHighLowB 0x8f // Register to get both High and Low bytes in 1 call.
 
-//Micro: 0, 1, 2, 3, 7   Mega: 2, 3, 18, 19, 20, 21   Due: all
-#define MYPIN1 2
-#define MYPIN2 3
-#define MYPIN3 0
-#define MYPIN4 1
-
-
-volatile int counter_tetha = 0;  //This variable will increase or decrease depending on the rotation of encoder
-volatile int counter_phi = 0;  //This variable will increase or decrease depending on the rotation of encoder
-volatile int previous_counter_t = 0;
-volatile int previous_counter_p = 0;
-volatile int tetha = 0;
-volatile int phi = 0;
+Encoder rotaryX(2, 3);
+Encoder rotaryY(18, 19);
 
 void setup() {
-  Serial.begin (9600);
-  Serial.flush();
-  //Setting up interrupt
-  //A rising pulse from encodenren activated ai0(). AttachInterrupt 0 is DigitalPin nr 2 on moust Arduino.
-  attachInterrupt(digitalPinToInterrupt(MYPIN1), ai0, RISING);
-
-  //B rising pulse from encodenren activated ai1(). AttachInterrupt 1 is DigitalPin nr 3 on moust Arduino.
-  attachInterrupt(digitalPinToInterrupt(MYPIN2), ai1, RISING);
-
-  //A rising pulse from encodenren activated ai0(). AttachInterrupt 2 is DigitalPin nr 18 on moust Arduino.
-  attachInterrupt(digitalPinToInterrupt(MYPIN3), ai2, RISING);
-
-  //B rising pulse from encodenren activated ai1(). AttachInterrupt 3 is DigitalPin nr 19 on moust Arduino.
-  attachInterrupt(digitalPinToInterrupt(MYPIN4), ai3, RISING);
-
-  pinMode(11, OUTPUT); // Set pin 2 as trigger pin
-  pinMode(5, INPUT); // Set pin 3 as monitor pin
-  digitalWrite(11, LOW); // Set trigger LOW for continuous read
-
+  Serial.begin(9600);
+  I2c.begin(); // Opens & joins the irc bus as master
   delay(100); // Waits to make sure everything is powered up before sending or receiving data
-
+  I2c.timeOut(50); // Sets a timeout to ensure no locking up of sketch if I2C communication fails
+  Serial.println("Basic Encoder Test:");
 }
+
+long oldPositionX  = -999;
+long oldPositionY  = -999;
 
 void loop() {
+  long newPositionX = rotaryX.read();
+  long newPositionY = rotaryY.read();
 
+  if (newPositionX != oldPositionX || newPositionY != oldPositionY ) {
 
-  int rho = pulseIn(5, HIGH); // Count how long the pulse is high in microseconds
-  if(rho != 0){ // If we get a reading that isn't zero, let's print it
-        rho = rho/10; // 10usec = 1 cm of distance for LIDAR-Lite
+    oldPositionX = newPositionX;
+    oldPositionY = newPositionY;
+    
+    // Write 0x04 to register 0x00
+    uint8_t nackack = 100; // Setup variable to hold ACK/NACK resopnses
+    while (nackack != 0) { // While NACK keep going (i.e. continue polling until sucess message (ACK) is received )
+      nackack = I2c.write(LIDARLite_ADDRESS, RegisterMeasure, MeasureValue); // Write 0x04 to 0x00
+      delay(1); // Wait 1 ms to prevent overpolling
+    }
+    byte distanceArray[2]; // array to store distance bytes from read function
+    // Read 2byte distance from register 0x8f
+    nackack = 100; // Setup variable to hold ACK/NACK resopnses
+    while (nackack != 0) { // While NACK keep going (i.e. continue polling until sucess message (ACK) is received )
+      nackack = I2c.read(LIDARLite_ADDRESS, RegisterHighLowB, 2, distanceArray); // Read 2 Bytes from LIDAR-Lite Address and store in array
+      delay(1); // Wait 1 ms to prevent overpolling
+    }
+    int distance = (distanceArray[0] << 8) + distanceArray[1]; // Shift high byte [0] 8 to the left and add low byte [1] to create 16-bit int
 
-    // Calcul angles
-    tetha += counter_tetha - previous_counter_t;
-  phi += counter_phi - previous_counter_p;
-
-  previous_counter_t = counter_tetha;
-  previous_counter_p = counter_phi;
-  // Send the value of counter
-  Serial.print(rho, DEC); Serial.print ("    "); Serial.print (tetha, DEC); Serial.print ("    "); Serial.println (phi, DEC);
-  delay(20); //Delay so we don't overload the serial port
-}
-}
-
-void ai0() {
-  // ai0 is activated if DigitalPin nr 2 is going from LOW to HIGH
-  // Check pin 3 to determine the direction
-  if (digitalRead(MYPIN2) == LOW) {
-    counter_tetha++;
-  } else {
-    counter_tetha--;
+    Serial.print(newPositionX); Serial.print("    "); Serial.print(newPositionY);Serial.print("    "); Serial.println(distance);
   }
 }
-
-void ai1() {
-  // ai0 is activated if DigitalPin nr 3 is going from LOW to HIGH
-  // Check with pin 2 to determine the direction
-  if (digitalRead(MYPIN1) == LOW) {
-    counter_tetha--;
-  } else {
-    counter_tetha++;
-  }
-}
-
-void ai2() {
-  // ai0 is activated if DigitalPin nr 18 is going from LOW to HIGH
-  // Check with pin 19 to determine the direction
-  if (digitalRead(MYPIN4) == LOW) {
-    counter_phi--;
-  } else {
-    counter_phi++;
-  }
-}
-
-void ai3() {
-  // ai3 is activated if DigitalPin nr 19 is going from LOW to HIGH
-  // Check with pin 18 to determine the direction
-  if (digitalRead(MYPIN3) == LOW) {
-    counter_phi++;
-  } else {
-    counter_phi--;
-  }
-}
-
-
